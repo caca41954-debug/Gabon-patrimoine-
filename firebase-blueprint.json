@@ -1,0 +1,369 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile containing role, academic context, and PII restricted to owner and admin.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "role": { "type": "string", "enum": ["citizen", "student", "researcher", "moderator", "admin"] },
+        "bio": { "type": "string", "maxLength": 1000 },
+        "province": { "type": "string", "maxLength": 60 },
+        "locality": { "type": "string", "maxLength": 120 },
+        "institution": { "type": "string", "maxLength": 160 },
+        "discipline": { "type": "string", "maxLength": 120 },
+        "studyLevel": { "type": "string", "maxLength": 80 },
+        "interests": { "type": "string", "maxLength": 300 },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "verifiedBadge": { "type": "boolean" },
+        "accountStatus": { "type": "string", "enum": ["active", "suspended", "assisted_pending"] },
+        "assistedByAdmin": { "type": "boolean" },
+        "consentAcceptedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "email", "role", "verifiedBadge", "accountStatus", "createdAt", "updatedAt"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Publicly readable non-PII attribution profile for contributors, researchers, and laureates.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "role": { "type": "string", "enum": ["citizen", "student", "researcher", "moderator", "admin"] },
+        "bio": { "type": "string", "maxLength": 1000 },
+        "province": { "type": "string", "maxLength": 60 },
+        "institution": { "type": "string", "maxLength": 160 },
+        "discipline": { "type": "string", "maxLength": 120 },
+        "verifiedBadge": { "type": "boolean" },
+        "isLaureate": { "type": "boolean" },
+        "laureatePeriod": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role", "verifiedBadge", "createdAt", "updatedAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Heritage classification category.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "slug": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 400 },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "name", "slug", "isActive"]
+    },
+    "Contribution": {
+      "title": "Contribution",
+      "description": "Cultural heritage documentation record submitted for moderation before publication.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "authorRole": { "type": "string", "enum": ["citizen", "student", "researcher", "moderator", "admin"] },
+        "authorVerified": { "type": "boolean" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 180 },
+        "summary": { "type": "string", "minLength": 10, "maxLength": 400 },
+        "description": { "type": "string", "minLength": 20, "maxLength": 12000 },
+        "categoryId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "categoryName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "province": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "locality": { "type": "string", "maxLength": 120 },
+        "sensitiveLocation": { "type": "boolean" },
+        "community": { "type": "string", "maxLength": 120 },
+        "language": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "periodLabel": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "epistemicType": { "type": "string", "enum": ["temoignage", "tradition_orale", "enquete_terrain", "analyse_academique", "archive_documentee"] },
+        "verificationLabel": { "type": "string", "enum": ["propose", "relu", "documente"] },
+        "visibility": { "type": "string", "enum": ["public", "restricted_community", "research_only"] },
+        "isSacredOrRestricted": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["draft", "submitted", "in_review", "needs_revision", "validated", "published", "rejected", "archived", "withdrawn"] },
+        "sourcesDescription": { "type": "string", "maxLength": 2000 },
+        "sourceUrl": { "type": "string", "maxLength": 500 },
+        "permissionType": { "type": "string", "enum": ["auteur_original", "autorisation_personnes", "domaine_public", "accord_communautaire"] },
+        "consentConfirmed": { "type": "boolean" },
+        "credit": { "type": "string", "maxLength": 200 },
+        "mediaAssets": { "type": "array" },
+        "moderationNote": { "type": "string", "maxLength": 1000 },
+        "reviewedBy": { "type": "string", "maxLength": 128 },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "publishedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "authorId", "authorName", "authorRole", "title", "summary", "description",
+        "categoryId", "categoryName", "province", "sensitiveLocation", "language",
+        "periodLabel", "epistemicType", "verificationLabel", "visibility",
+        "isSacredOrRestricted", "status", "permissionType", "consentConfirmed",
+        "mediaAssets", "createdAt", "updatedAt"
+      ]
+    },
+    "ModerationEvent": {
+      "title": "ModerationEvent",
+      "description": "Audit record of a moderation decision with private internal notes.",
+      "type": "object",
+      "properties": {
+        "contributionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "contributionTitle": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "moderatorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "moderatorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "decision": { "type": "string", "enum": ["in_review", "needs_revision", "validated", "published", "rejected", "archived", "withdrawn"] },
+        "reason": { "type": "string", "maxLength": 1000 },
+        "internalNote": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["contributionId", "contributionTitle", "moderatorId", "moderatorName", "decision", "reason", "createdAt"]
+    },
+    "ModerationHistoryEntry": {
+      "title": "ModerationHistoryEntry",
+      "description": "Author-accessible chronological moderation history entry without private internal notes.",
+      "type": "object",
+      "properties": {
+        "contributionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "moderatorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "moderatorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "decision": { "type": "string", "enum": ["submitted", "in_review", "needs_revision", "validated", "published", "rejected", "archived", "withdrawn"] },
+        "verificationLabel": { "type": "string", "enum": ["propose", "relu", "documente"] },
+        "reason": { "type": "string", "minLength": 2, "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["contributionId", "authorId", "moderatorId", "moderatorName", "decision", "verificationLabel", "reason", "createdAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "User report flagging factual error, rights violation, or restricted sacred content.",
+      "type": "object",
+      "properties": {
+        "contributionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "contributionTitle": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "reporterId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reporterName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "reasonCategory": { "type": "string", "enum": ["erreur_factuelle", "droit_auteur_ou_image", "savoir_sacre_restreint", "contenu_illicite"] },
+        "details": { "type": "string", "minLength": 10, "maxLength": 1500 },
+        "status": { "type": "string", "enum": ["open", "reviewing", "resolved", "dismissed"] },
+        "resolutionNote": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["contributionId", "contributionTitle", "reporterId", "reporterName", "reasonCategory", "details", "status", "createdAt", "updatedAt"]
+    },
+    "AssistanceRequest": {
+      "title": "AssistanceRequest",
+      "description": "Support ticket for users who encounter account creation or profile recovery difficulties.",
+      "type": "object",
+      "properties": {
+        "requesterUid": { "type": "string", "maxLength": 128 },
+        "requesterName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "contactInfo": { "type": "string", "minLength": 4, "maxLength": 160 },
+        "requestedRole": { "type": "string", "enum": ["citizen", "student", "researcher"] },
+        "message": { "type": "string", "minLength": 10, "maxLength": 1500 },
+        "status": { "type": "string", "enum": ["open", "in_progress", "resolved"] },
+        "adminNote": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requesterName", "contactInfo", "requestedRole", "message", "status", "createdAt", "updatedAt"]
+    },
+    "AssistedAccount": {
+      "title": "AssistedAccount",
+      "description": "Admin-provisioned profile record to assist users struggling to register.",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "role": { "type": "string", "enum": ["citizen", "student", "researcher", "moderator"] },
+        "province": { "type": "string", "maxLength": 60 },
+        "institution": { "type": "string", "maxLength": 160 },
+        "discipline": { "type": "string", "maxLength": 120 },
+        "notes": { "type": "string", "maxLength": 600 },
+        "claimStatus": { "type": "string", "enum": ["pending_first_login", "claimed"] },
+        "claimedUid": { "type": "string", "maxLength": 128 },
+        "createdByAdminId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["displayName", "email", "role", "claimStatus", "createdByAdminId", "createdAt", "updatedAt"]
+    },
+    "Reward": {
+      "title": "Reward",
+      "description": "Contributor recognition reward stored with integer XAF amounts.",
+      "type": "object",
+      "properties": {
+        "contributorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "contributorName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "contributorRole": { "type": "string", "enum": ["citizen", "student", "researcher", "moderator", "admin"] },
+        "periodLabel": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "amountXaf": { "type": "integer" },
+        "currency": { "type": "string", "enum": ["XAF"] },
+        "criteriaSummary": { "type": "string", "minLength": 10, "maxLength": 1000 },
+        "featuredContributionTitle": { "type": "string", "maxLength": 180 },
+        "publicAnnouncementApproved": { "type": "boolean" },
+        "decisionStatus": { "type": "string", "enum": ["proposed", "approved", "announced", "paid", "cancelled"] },
+        "approvedBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "announcedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "contributorId", "contributorName", "contributorRole", "periodLabel",
+        "amountXaf", "currency", "criteriaSummary", "publicAnnouncementApproved",
+        "decisionStatus", "approvedBy", "createdAt", "updatedAt"
+      ]
+    },
+    "PayoutRequest": {
+      "title": "PayoutRequest",
+      "description": "Mobile Money withdrawal request subject to admin verification and provider status.",
+      "type": "object",
+      "properties": {
+        "rewardId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "beneficiaryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "beneficiaryName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "provider": { "type": "string", "enum": ["airtel_money", "moov_money"] },
+        "maskedPhone": { "type": "string", "minLength": 6, "maxLength": 40 },
+        "amountXaf": { "type": "integer" },
+        "status": { "type": "string", "enum": ["pending_admin_review", "approved_manual_payout", "awaiting_provider_config", "processing_provider", "paid", "rejected", "cancelled"] },
+        "providerReference": { "type": "string", "maxLength": 120 },
+        "failureReason": { "type": "string", "maxLength": 400 },
+        "requestedAt": { "type": "string", "format": "date-time" },
+        "processedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["rewardId", "beneficiaryId", "beneficiaryName", "provider", "maskedPhone", "amountXaf", "status", "requestedAt", "updatedAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Immutable financial transaction ledger entry for verified payouts.",
+      "type": "object",
+      "properties": {
+        "payoutRequestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "beneficiaryId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "provider": { "type": "string", "enum": ["airtel_money", "moov_money"] },
+        "providerTransactionId": { "type": "string", "maxLength": 120 },
+        "amountXaf": { "type": "integer" },
+        "status": { "type": "string", "enum": ["pending", "success", "failed", "reversed"] },
+        "idempotencyKey": { "type": "string", "minLength": 8, "maxLength": 128 },
+        "executionNote": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["payoutRequestId", "beneficiaryId", "provider", "amountXaf", "status", "idempotencyKey", "createdAt", "updatedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notification for contribution status, rewards, and admin support.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "message": { "type": "string", "minLength": 2, "maxLength": 500 },
+        "type": { "type": "string", "enum": ["contribution", "moderation", "reward", "payout", "assistance"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message", "type", "read", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable security and governance audit trail.",
+      "type": "object",
+      "properties": {
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorEmail": { "type": "string", "maxLength": 160 },
+        "action": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "targetType": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "targetId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "summary": { "type": "string", "minLength": 2, "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorId", "action", "targetType", "targetId", "summary", "createdAt"]
+    },
+    "SocialLink": {
+      "title": "SocialLink",
+      "description": "Official Gabon Patrimoine social network link configured by the principal administrator.",
+      "type": "object",
+      "properties": {
+        "platform": { "type": "string", "enum": ["facebook", "instagram", "x", "youtube", "linkedin", "tiktok", "whatsapp", "other"] },
+        "label": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "url": { "type": "string", "minLength": 8, "maxLength": 400, "pattern": "^https://.+" },
+        "isActive": { "type": "boolean" },
+        "displayOrder": { "type": "integer" },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["platform", "label", "url", "isActive", "displayOrder", "updatedBy", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile and role assignment."
+    },
+    "/public_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Publicly accessible contributor attribution profile without PII."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Cultural heritage categories."
+    },
+    "/contributions/{contributionId}": {
+      "schema": { "$ref": "#/entities/Contribution" },
+      "description": "Cultural heritage contributions with mandatory moderation workflow."
+    },
+    "/contributions/{contributionId}/moderation_history/{entryId}": {
+      "schema": { "$ref": "#/entities/ModerationHistoryEntry" },
+      "description": "Author-accessible chronological moderation history subcollection without private internal notes."
+    },
+    "/moderation_events/{eventId}": {
+      "schema": { "$ref": "#/entities/ModerationEvent" },
+      "description": "Moderator and admin review logs."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "Content and rights violation reports."
+    },
+    "/assistance_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/AssistanceRequest" },
+      "description": "Account onboarding and recovery support requests."
+    },
+    "/assisted_accounts/{assistedId}": {
+      "schema": { "$ref": "#/entities/AssistedAccount" },
+      "description": "Admin-provisioned user accounts waiting for first sign-in claim."
+    },
+    "/rewards/{rewardId}": {
+      "schema": { "$ref": "#/entities/Reward" },
+      "description": "Contributor recognition awards in integer XAF."
+    },
+    "/payout_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/PayoutRequest" },
+      "description": "Mobile Money withdrawal requests."
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Financial ledger entries for payouts."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User in-app notifications."
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable administrative and sensitive action audit logs."
+    },
+    "/social_links/{linkId}": {
+      "schema": { "$ref": "#/entities/SocialLink" },
+      "description": "Publicly visible official social links managed by the principal administrator."
+    }
+  }
+}

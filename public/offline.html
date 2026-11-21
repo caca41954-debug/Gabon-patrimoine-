@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532D" />
+    <title>Hors connexion — Gabon Patrimoine</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        font-family: -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", sans-serif;
+        background: #F9F8F6;
+        color: #181715;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #111110;
+          color: #F5F4F0;
+        }
+        .card {
+          background: #1C1B19 !important;
+          border-color: #2E2C28 !important;
+        }
+        .muted {
+          color: #A8A29E !important;
+        }
+      }
+      .card {
+        max-width: 460px;
+        width: 100%;
+        background: #FFFFFF;
+        border: 1px solid #E7E5E4;
+        border-radius: 20px;
+        padding: 32px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
+      }
+      .eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #92400E;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      h1 {
+        font-family: Georgia, serif;
+        font-size: 28px;
+        line-height: 1.15;
+        margin: 0 0 12px;
+      }
+      p {
+        font-size: 14px;
+        line-height: 1.6;
+        margin: 0 0 20px;
+      }
+      .muted {
+        color: #57534E;
+      }
+      button {
+        appearance: none;
+        border: 0;
+        background: #14532D;
+        color: #FFFFFF;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 12px 20px;
+        border-radius: 12px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <p class="eyebrow">Mode hors ligne · Gabon Patrimoine</p>
+      <h1>Connexion internet interrompue</h1>
+      <p class="muted">
+        Vous pouvez continuer à consulter les pages déjà mises en cache. Dès le retour du réseau, actualisez la page pour synchroniser la bibliothèque, vos dépôts et vos transactions Mobile Money.
+      </p>
+      <button type="button" onclick="window.location.reload()">Réessayer la connexion</button>
+    </main>
+  </body>
+</html>

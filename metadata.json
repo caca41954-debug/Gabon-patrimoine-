@@ -1,0 +1,6 @@
+{
+  "name": "Gabon Patrimoine",
+  "description": "Plateforme numérique consacrée à la sauvegarde, à la documentation et à la valorisation du patrimoine culturel gabonais.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

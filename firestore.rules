@@ -1,0 +1,778 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default Deny All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // GLOBAL PRIMITIVES & IDENTITY HELPERS
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrapAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'arnaudndoumelobe821@gmail.com';
+    }
+
+    function userDocExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isBootstrapAdmin() || (
+        isVerifiedUser() && userDocExists() && getUserRole() == 'admin'
+      );
+    }
+
+    function isModerator() {
+      return isAdmin() || (
+        isVerifiedUser() && userDocExists() && getUserRole() in ['moderator', 'admin']
+      );
+    }
+
+    function isResearcherOrStaff() {
+      return isModerator() || (
+        isVerifiedUser() && userDocExists() && getUserRole() == 'researcher'
+      );
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isOptionalString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    // =========================================================================
+    // VALIDATION BLUEPRINTS
+    // =========================================================================
+    function isValidUserProfile(data, uid) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'role', 'verifiedBadge', 'accountStatus', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'phone', 'role', 'bio', 'province',
+          'locality', 'institution', 'discipline', 'studyLevel', 'interests',
+          'avatarUrl', 'verifiedBadge', 'accountStatus', 'assistedByAdmin',
+          'consentAcceptedAt', 'createdAt', 'updatedAt'
+        ])
+        && data.uid == uid
+        && isValidId(data.uid)
+        && isValidString(data.displayName, 2, 100)
+        && isValidString(data.email, 3, 160)
+        && data.role in ['citizen', 'student', 'researcher', 'moderator', 'admin']
+        && data.verifiedBadge is bool
+        && data.accountStatus in ['active', 'suspended', 'assisted_pending']
+        && isOptionalString(data, 'phone', 40)
+        && isOptionalString(data, 'bio', 1000)
+        && isOptionalString(data, 'province', 60)
+        && isOptionalString(data, 'locality', 120)
+        && isOptionalString(data, 'institution', 160)
+        && isOptionalString(data, 'discipline', 120)
+        && isOptionalString(data, 'studyLevel', 80)
+        && isOptionalString(data, 'interests', 300)
+        && isOptionalString(data, 'avatarUrl', 500)
+        && (!('assistedByAdmin' in data) || data.assistedByAdmin is bool)
+        && (!('consentAcceptedAt' in data) || data.consentAcceptedAt is timestamp)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicProfile(data, uid) {
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'verifiedBadge', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'role', 'bio', 'province', 'institution',
+          'discipline', 'verifiedBadge', 'isLaureate', 'laureatePeriod',
+          'createdAt', 'updatedAt'
+        ])
+        && data.uid == uid
+        && isValidId(data.uid)
+        && isValidString(data.displayName, 2, 100)
+        && data.role in ['citizen', 'student', 'researcher', 'moderator', 'admin']
+        && data.verifiedBadge is bool
+        && isOptionalString(data, 'bio', 1000)
+        && isOptionalString(data, 'province', 60)
+        && isOptionalString(data, 'institution', 160)
+        && isOptionalString(data, 'discipline', 120)
+        && (!('isLaureate' in data) || data.isLaureate is bool)
+        && isOptionalString(data, 'laureatePeriod', 80)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCategory(data, catId) {
+      return data.keys().hasAll(['id', 'name', 'slug', 'isActive'])
+        && data.keys().hasOnly(['id', 'name', 'slug', 'description', 'isActive'])
+        && data.id == catId
+        && isValidId(data.id)
+        && isValidString(data.name, 2, 80)
+        && isValidString(data.slug, 2, 80)
+        && isOptionalString(data, 'description', 400)
+        && data.isActive is bool;
+    }
+
+    function isValidContribution(data) {
+      return data.keys().hasAll([
+          'authorId', 'authorName', 'authorRole', 'title', 'summary', 'description',
+          'categoryId', 'categoryName', 'province', 'sensitiveLocation', 'language',
+          'periodLabel', 'epistemicType', 'verificationLabel', 'visibility',
+          'isSacredOrRestricted', 'status', 'permissionType', 'consentConfirmed',
+          'mediaAssets', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'authorId', 'authorName', 'authorRole', 'authorVerified', 'title', 'summary',
+          'description', 'categoryId', 'categoryName', 'province', 'locality',
+          'sensitiveLocation', 'community', 'language', 'periodLabel', 'epistemicType',
+          'verificationLabel', 'visibility', 'isSacredOrRestricted', 'status',
+          'sourcesDescription', 'sourceUrl', 'permissionType', 'consentConfirmed',
+          'credit', 'mediaAssets', 'moderationNote', 'reviewedBy', 'reviewedAt',
+          'publishedAt', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.authorId)
+        && isValidString(data.authorName, 2, 100)
+        && data.authorRole in ['citizen', 'student', 'researcher', 'moderator', 'admin']
+        && (!('authorVerified' in data) || data.authorVerified is bool)
+        && isValidString(data.title, 3, 180)
+        && isValidString(data.summary, 10, 400)
+        && isValidString(data.description, 20, 12000)
+        && isValidId(data.categoryId)
+        && isValidString(data.categoryName, 2, 80)
+        && isValidString(data.province, 2, 60)
+        && isOptionalString(data, 'locality', 120)
+        && data.sensitiveLocation is bool
+        && isOptionalString(data, 'community', 120)
+        && isValidString(data.language, 2, 80)
+        && isValidString(data.periodLabel, 2, 80)
+        && data.epistemicType in ['temoignage', 'tradition_orale', 'enquete_terrain', 'analyse_academique', 'archive_documentee']
+        && data.verificationLabel in ['propose', 'relu', 'documente']
+        && data.visibility in ['public', 'restricted_community', 'research_only']
+        && data.isSacredOrRestricted is bool
+        && data.status in ['draft', 'submitted', 'in_review', 'needs_revision', 'validated', 'published', 'rejected', 'archived', 'withdrawn']
+        && isOptionalString(data, 'sourcesDescription', 2000)
+        && isOptionalString(data, 'sourceUrl', 500)
+        && data.permissionType in ['auteur_original', 'autorisation_personnes', 'domaine_public', 'accord_communautaire']
+        && data.consentConfirmed is bool
+        && isOptionalString(data, 'credit', 200)
+        && data.mediaAssets is list
+        && data.mediaAssets.size() <= 6
+        && (data.mediaAssets.size() == 0 || data.mediaAssets[0] is map)
+        && isOptionalString(data, 'moderationNote', 1000)
+        && isOptionalString(data, 'reviewedBy', 128)
+        && (!('reviewedAt' in data) || data.reviewedAt == null || data.reviewedAt is timestamp)
+        && (!('publishedAt' in data) || data.publishedAt == null || data.publishedAt is timestamp)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidModerationEvent(data) {
+      return data.keys().hasAll(['contributionId', 'contributionTitle', 'moderatorId', 'moderatorName', 'decision', 'reason', 'createdAt'])
+        && data.keys().hasOnly(['contributionId', 'contributionTitle', 'moderatorId', 'moderatorName', 'decision', 'reason', 'internalNote', 'createdAt'])
+        && isValidId(data.contributionId)
+        && isValidString(data.contributionTitle, 1, 180)
+        && isValidId(data.moderatorId)
+        && isValidString(data.moderatorName, 1, 100)
+        && data.decision in ['in_review', 'needs_revision', 'validated', 'published', 'rejected', 'archived', 'withdrawn']
+        && isValidString(data.reason, 2, 1000)
+        && isOptionalString(data, 'internalNote', 1000)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidModerationHistoryEntry(data) {
+      return data.keys().hasAll(['contributionId', 'authorId', 'moderatorId', 'moderatorName', 'decision', 'verificationLabel', 'reason', 'createdAt'])
+        && data.keys().hasOnly(['contributionId', 'authorId', 'moderatorId', 'moderatorName', 'decision', 'verificationLabel', 'reason', 'createdAt'])
+        && isValidId(data.contributionId)
+        && isValidId(data.authorId)
+        && isValidId(data.moderatorId)
+        && isValidString(data.moderatorName, 1, 100)
+        && data.decision in ['submitted', 'in_review', 'needs_revision', 'validated', 'published', 'rejected', 'archived', 'withdrawn']
+        && data.verificationLabel in ['propose', 'relu', 'documente']
+        && isValidString(data.reason, 2, 1000)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasAll(['contributionId', 'contributionTitle', 'reporterId', 'reporterName', 'reasonCategory', 'details', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['contributionId', 'contributionTitle', 'reporterId', 'reporterName', 'reasonCategory', 'details', 'status', 'resolutionNote', 'createdAt', 'updatedAt'])
+        && isValidId(data.contributionId)
+        && isValidString(data.contributionTitle, 1, 180)
+        && isValidId(data.reporterId)
+        && isValidString(data.reporterName, 1, 100)
+        && data.reasonCategory in ['erreur_factuelle', 'droit_auteur_ou_image', 'savoir_sacre_restreint', 'contenu_illicite']
+        && isValidString(data.details, 10, 1500)
+        && data.status in ['open', 'reviewing', 'resolved', 'dismissed']
+        && isOptionalString(data, 'resolutionNote', 1000)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAssistanceRequest(data) {
+      return data.keys().hasAll(['requesterName', 'contactInfo', 'requestedRole', 'message', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['requesterUid', 'requesterName', 'contactInfo', 'requestedRole', 'message', 'status', 'adminNote', 'createdAt', 'updatedAt'])
+        && isOptionalString(data, 'requesterUid', 128)
+        && isValidString(data.requesterName, 2, 100)
+        && isValidString(data.contactInfo, 4, 160)
+        && data.requestedRole in ['citizen', 'student', 'researcher']
+        && isValidString(data.message, 10, 1500)
+        && data.status in ['open', 'in_progress', 'resolved']
+        && isOptionalString(data, 'adminNote', 1000)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAssistedAccount(data) {
+      return data.keys().hasAll(['displayName', 'email', 'role', 'claimStatus', 'createdByAdminId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['displayName', 'email', 'phone', 'role', 'province', 'institution', 'discipline', 'notes', 'claimStatus', 'claimedUid', 'createdByAdminId', 'createdAt', 'updatedAt'])
+        && isValidString(data.displayName, 2, 100)
+        && isValidString(data.email, 3, 160)
+        && isOptionalString(data, 'phone', 40)
+        && data.role in ['citizen', 'student', 'researcher', 'moderator']
+        && isOptionalString(data, 'province', 60)
+        && isOptionalString(data, 'institution', 160)
+        && isOptionalString(data, 'discipline', 120)
+        && isOptionalString(data, 'notes', 600)
+        && data.claimStatus in ['pending_first_login', 'claimed']
+        && isOptionalString(data, 'claimedUid', 128)
+        && isValidId(data.createdByAdminId)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidReward(data) {
+      return data.keys().hasAll([
+          'contributorId', 'contributorName', 'contributorRole', 'periodLabel',
+          'amountXaf', 'currency', 'criteriaSummary', 'publicAnnouncementApproved',
+          'decisionStatus', 'approvedBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'contributorId', 'contributorName', 'contributorRole', 'periodLabel',
+          'amountXaf', 'currency', 'criteriaSummary', 'featuredContributionTitle',
+          'publicAnnouncementApproved', 'decisionStatus', 'approvedBy', 'announcedAt',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.contributorId)
+        && isValidString(data.contributorName, 2, 100)
+        && data.contributorRole in ['citizen', 'student', 'researcher', 'moderator', 'admin']
+        && isValidString(data.periodLabel, 2, 60)
+        && data.amountXaf is int && data.amountXaf >= 0 && data.amountXaf <= 50000000
+        && data.currency == 'XAF'
+        && isValidString(data.criteriaSummary, 10, 1000)
+        && isOptionalString(data, 'featuredContributionTitle', 180)
+        && data.publicAnnouncementApproved is bool
+        && data.decisionStatus in ['proposed', 'approved', 'announced', 'paid', 'cancelled']
+        && isValidId(data.approvedBy)
+        && (!('announcedAt' in data) || data.announcedAt == null || data.announcedAt is timestamp)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPayoutRequest(data) {
+      return data.keys().hasAll(['rewardId', 'beneficiaryId', 'beneficiaryName', 'provider', 'maskedPhone', 'amountXaf', 'status', 'requestedAt', 'updatedAt'])
+        && data.keys().hasOnly(['rewardId', 'beneficiaryId', 'beneficiaryName', 'provider', 'maskedPhone', 'amountXaf', 'status', 'providerReference', 'failureReason', 'requestedAt', 'processedAt', 'updatedAt'])
+        && isValidId(data.rewardId)
+        && isValidId(data.beneficiaryId)
+        && isValidString(data.beneficiaryName, 2, 100)
+        && data.provider in ['airtel_money', 'moov_money']
+        && isValidString(data.maskedPhone, 6, 40)
+        && data.amountXaf is int && data.amountXaf > 0 && data.amountXaf <= 50000000
+        && data.status in ['pending_admin_review', 'approved_manual_payout', 'awaiting_provider_config', 'processing_provider', 'paid', 'rejected', 'cancelled']
+        && isOptionalString(data, 'providerReference', 120)
+        && isOptionalString(data, 'failureReason', 400)
+        && data.requestedAt is timestamp
+        && (!('processedAt' in data) || data.processedAt == null || data.processedAt is timestamp)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['payoutRequestId', 'beneficiaryId', 'provider', 'amountXaf', 'status', 'idempotencyKey', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['payoutRequestId', 'beneficiaryId', 'provider', 'providerTransactionId', 'amountXaf', 'status', 'idempotencyKey', 'executionNote', 'createdAt', 'updatedAt'])
+        && isValidId(data.payoutRequestId)
+        && isValidId(data.beneficiaryId)
+        && data.provider in ['airtel_money', 'moov_money']
+        && isOptionalString(data, 'providerTransactionId', 120)
+        && data.amountXaf is int && data.amountXaf > 0 && data.amountXaf <= 50000000
+        && data.status in ['pending', 'success', 'failed', 'reversed']
+        && isValidString(data.idempotencyKey, 8, 128)
+        && isOptionalString(data, 'executionNote', 400)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'title', 'message', 'type', 'read', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'title', 'message', 'type', 'read', 'createdAt'])
+        && isValidId(data.userId)
+        && isValidString(data.title, 2, 120)
+        && isValidString(data.message, 2, 500)
+        && data.type in ['contribution', 'moderation', 'reward', 'payout', 'assistance']
+        && data.read is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['actorId', 'action', 'targetType', 'targetId', 'summary', 'createdAt'])
+        && data.keys().hasOnly(['actorId', 'actorEmail', 'action', 'targetType', 'targetId', 'summary', 'createdAt'])
+        && isValidId(data.actorId)
+        && isOptionalString(data, 'actorEmail', 160)
+        && isValidString(data.action, 2, 100)
+        && isValidString(data.targetType, 2, 60)
+        && isValidString(data.targetId, 1, 128)
+        && isValidString(data.summary, 2, 400)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSocialLink(data) {
+      return data.keys().hasAll(['platform', 'label', 'url', 'isActive', 'displayOrder', 'updatedBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['platform', 'label', 'url', 'isActive', 'displayOrder', 'updatedBy', 'createdAt', 'updatedAt'])
+        && data.platform in ['facebook', 'instagram', 'x', 'youtube', 'linkedin', 'tiktok', 'whatsapp', 'other']
+        && isValidString(data.label, 2, 60)
+        && isValidString(data.url, 8, 400)
+        && data.url.matches('^https://.+')
+        && data.isActive is bool
+        && data.displayOrder is int && data.displayOrder >= 0 && data.displayOrder <= 1000
+        && isValidId(data.updatedBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function canReadPublishedContribution(data) {
+      return data.status == 'published' && (
+        data.visibility == 'public'
+        || (data.visibility == 'restricted_community' && isVerifiedUser())
+        || (data.visibility == 'research_only' && isResearcherOrStaff())
+      );
+    }
+
+    // =========================================================================
+    // COLLECTION RULES
+    // =========================================================================
+
+    // 1. Private User Profiles (PII Isolated)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId)
+        && isVerifiedUser()
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (
+            isOwner(userId)
+            && incoming().email == request.auth.token.email
+            && incoming().accountStatus == 'active'
+            && incoming().verifiedBadge == false
+            && (
+              (isBootstrapAdmin() && incoming().role == 'admin')
+              || (!isBootstrapAdmin() && incoming().role in ['citizen', 'student', 'researcher'])
+            )
+          )
+          || isAdmin()
+        );
+      allow update: if isValidId(userId)
+        && isVerifiedUser()
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isOwner(userId)
+            && incoming().role == existing().role
+            && incoming().verifiedBadge == existing().verifiedBadge
+            && incoming().accountStatus == existing().accountStatus
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'phone', 'bio', 'province', 'locality',
+              'institution', 'discipline', 'studyLevel', 'interests',
+              'avatarUrl', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // 2. Public Profiles (No PII)
+    match /public_profiles/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if true;
+      allow create: if isValidId(userId)
+        && isVerifiedUser()
+        && isValidPublicProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (
+            isOwner(userId)
+            && incoming().verifiedBadge == false
+            && (!('isLaureate' in incoming()) || incoming().isLaureate == false)
+            && (
+              (isBootstrapAdmin() && incoming().role == 'admin')
+              || (!isBootstrapAdmin() && incoming().role in ['citizen', 'student', 'researcher'])
+            )
+          )
+          || isAdmin()
+        );
+      allow update: if isValidId(userId)
+        && isVerifiedUser()
+        && isValidPublicProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isOwner(userId)
+            && incoming().role == existing().role
+            && incoming().verifiedBadge == existing().verifiedBadge
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'bio', 'province', 'institution', 'discipline', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // 3. Categories
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create: if isValidId(categoryId) && isAdmin() && isValidCategory(incoming(), categoryId);
+      allow update: if isValidId(categoryId) && isAdmin() && isValidCategory(incoming(), categoryId);
+      allow delete: if isValidId(categoryId) && isAdmin();
+    }
+
+    // 4. Contributions (Mandatory Moderation Workflow)
+    match /contributions/{contributionId} {
+      allow get: if isValidId(contributionId) && (
+        canReadPublishedContribution(existing())
+        || (isSignedIn() && (existing().authorId == request.auth.uid || isModerator()))
+      );
+      allow list: if canReadPublishedContribution(existing())
+        || (isSignedIn() && (existing().authorId == request.auth.uid || isModerator()));
+      allow create: if isValidId(contributionId)
+        && isVerifiedUser()
+        && isValidContribution(incoming())
+        && incoming().authorId == request.auth.uid
+        && incoming().status in ['draft', 'submitted']
+        && (incoming().status == 'draft' || incoming().consentConfirmed == true)
+        && incoming().verificationLabel == 'propose'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (!('publishedAt' in incoming()) || incoming().publishedAt == null);
+      allow update: if isValidId(contributionId)
+        && isVerifiedUser()
+        && isValidContribution(incoming())
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            isModerator()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'verificationLabel', 'visibility', 'sensitiveLocation',
+              'isSacredOrRestricted', 'moderationNote', 'reviewedBy',
+              'reviewedAt', 'publishedAt', 'updatedAt', 'title', 'summary',
+              'description', 'categoryId', 'categoryName', 'province', 'locality',
+              'community', 'language', 'periodLabel'
+            ])
+          )
+          || (
+            isOwner(existing().authorId)
+            && existing().status in ['draft', 'needs_revision']
+            && incoming().status in ['draft', 'submitted', 'withdrawn']
+            && (incoming().status == 'draft' || incoming().consentConfirmed == true)
+            && incoming().verificationLabel == existing().verificationLabel
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'summary', 'description', 'categoryId', 'categoryName',
+              'province', 'locality', 'sensitiveLocation', 'community', 'language',
+              'periodLabel', 'epistemicType', 'visibility', 'isSacredOrRestricted',
+              'status', 'sourcesDescription', 'sourceUrl', 'permissionType',
+              'consentConfirmed', 'credit', 'mediaAssets', 'updatedAt'
+            ])
+          )
+          || (
+            isOwner(existing().authorId)
+            && incoming().status == 'withdrawn'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(contributionId) && (
+        isAdmin()
+        || (isOwner(existing().authorId) && existing().status == 'draft')
+      );
+
+      // 4b. Author-Accessible Moderation History Subcollection (No Internal Notes)
+      match /moderation_history/{entryId} {
+        allow get: if isValidId(contributionId) && isValidId(entryId) && (
+          isModerator()
+          || (
+            isSignedIn()
+            && existing().authorId == request.auth.uid
+            && get(/databases/$(database)/documents/contributions/$(contributionId)).data.authorId == request.auth.uid
+          )
+        );
+        allow list: if isModerator() || (isSignedIn() && existing().authorId == request.auth.uid);
+        allow create: if isValidId(contributionId)
+          && isValidId(entryId)
+          && isVerifiedUser()
+          && isValidModerationHistoryEntry(incoming())
+          && incoming().contributionId == contributionId
+          && incoming().moderatorId == request.auth.uid
+          && incoming().createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/contributions/$(contributionId))
+          && getAfter(/databases/$(database)/documents/contributions/$(contributionId)).data.authorId == incoming().authorId
+          && (
+            isModerator()
+            || (
+              incoming().authorId == request.auth.uid
+              && incoming().decision == 'submitted'
+              && incoming().verificationLabel == 'propose'
+            )
+          );
+        allow update, delete: if false;
+      }
+    }
+
+    // 5. Moderation Events
+    match /moderation_events/{eventId} {
+      allow get: if isValidId(eventId) && isModerator();
+      allow list: if isModerator();
+      allow create: if isValidId(eventId)
+        && isModerator()
+        && isValidModerationEvent(incoming())
+        && incoming().moderatorId == request.auth.uid
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/contributions/$(incoming().contributionId));
+      allow update, delete: if false;
+    }
+
+    // 6. Reports
+    match /reports/{reportId} {
+      allow get: if isValidId(reportId) && (isModerator() || (isSignedIn() && existing().reporterId == request.auth.uid));
+      allow list: if isModerator() || (isSignedIn() && existing().reporterId == request.auth.uid);
+      allow create: if isValidId(reportId)
+        && isVerifiedUser()
+        && isValidReport(incoming())
+        && incoming().reporterId == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/contributions/$(incoming().contributionId));
+      allow update: if isValidId(reportId)
+        && isModerator()
+        && isValidReport(incoming())
+        && incoming().reporterId == existing().reporterId
+        && incoming().contributionId == existing().contributionId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'resolutionNote', 'updatedAt']);
+      allow delete: if isValidId(reportId) && isAdmin();
+    }
+
+    // 7. Assistance Requests (Account Help)
+    match /assistance_requests/{requestId} {
+      allow get: if isValidId(requestId) && (isAdmin() || (isSignedIn() && 'requesterUid' in existing() && existing().requesterUid == request.auth.uid));
+      allow list: if isAdmin() || (isSignedIn() && 'requesterUid' in existing() && existing().requesterUid == request.auth.uid);
+      allow create: if isValidId(requestId)
+        && isVerifiedUser()
+        && isValidAssistanceRequest(incoming())
+        && incoming().requesterUid == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(requestId)
+        && isAdmin()
+        && isValidAssistanceRequest(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminNote', 'updatedAt']);
+      allow delete: if isValidId(requestId) && isAdmin();
+    }
+
+    // 8. Assisted Accounts (Admin pre-created profiles)
+    match /assisted_accounts/{assistedId} {
+      allow get: if isValidId(assistedId) && (isAdmin() || (isVerifiedUser() && existing().email == request.auth.token.email));
+      allow list: if isAdmin() || (isVerifiedUser() && existing().email == request.auth.token.email);
+      allow create: if isValidId(assistedId)
+        && isAdmin()
+        && isValidAssistedAccount(incoming())
+        && incoming().createdByAdminId == request.auth.uid
+        && incoming().claimStatus == 'pending_first_login'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(assistedId)
+        && isVerifiedUser()
+        && isValidAssistedAccount(incoming())
+        && incoming().createdByAdminId == existing().createdByAdminId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            existing().email == request.auth.token.email
+            && existing().claimStatus == 'pending_first_login'
+            && incoming().claimStatus == 'claimed'
+            && incoming().claimedUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['claimStatus', 'claimedUid', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(assistedId) && isAdmin();
+    }
+
+    // 9. Rewards (Laureates & Integer XAF)
+    match /rewards/{rewardId} {
+      allow get: if isValidId(rewardId) && (
+        (existing().decisionStatus in ['announced', 'paid'] && existing().publicAnnouncementApproved == true)
+        || (isSignedIn() && (existing().contributorId == request.auth.uid || isAdmin()))
+      );
+      allow list: if (existing().decisionStatus in ['announced', 'paid'] && existing().publicAnnouncementApproved == true)
+        || (isSignedIn() && (existing().contributorId == request.auth.uid || isAdmin()));
+      allow create: if isValidId(rewardId)
+        && isAdmin()
+        && isValidReward(incoming())
+        && incoming().approvedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(rewardId)
+        && isVerifiedUser()
+        && isValidReward(incoming())
+        && incoming().contributorId == existing().contributorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isOwner(existing().contributorId)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['publicAnnouncementApproved', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(rewardId) && isAdmin();
+    }
+
+    // 10. Payout Requests (Mobile Money Withdrawal Requests)
+    match /payout_requests/{requestId} {
+      allow get: if isValidId(requestId) && (isAdmin() || (isSignedIn() && existing().beneficiaryId == request.auth.uid));
+      allow list: if isAdmin() || (isSignedIn() && existing().beneficiaryId == request.auth.uid);
+      allow create: if isValidId(requestId)
+        && isVerifiedUser()
+        && isValidPayoutRequest(incoming())
+        && incoming().beneficiaryId == request.auth.uid
+        && incoming().status == 'pending_admin_review'
+        && incoming().requestedAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/rewards/$(incoming().rewardId))
+        && get(/databases/$(database)/documents/rewards/$(incoming().rewardId)).data.contributorId == request.auth.uid
+        && get(/databases/$(database)/documents/rewards/$(incoming().rewardId)).data.amountXaf == incoming().amountXaf
+        && get(/databases/$(database)/documents/rewards/$(incoming().rewardId)).data.decisionStatus in ['approved', 'announced'];
+      allow update: if isValidId(requestId)
+        && isAdmin()
+        && isValidPayoutRequest(incoming())
+        && incoming().rewardId == existing().rewardId
+        && incoming().beneficiaryId == existing().beneficiaryId
+        && incoming().amountXaf == existing().amountXaf
+        && incoming().requestedAt == existing().requestedAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(requestId) && isAdmin();
+    }
+
+    // 11. Financial Transactions Ledger
+    match /transactions/{transactionId} {
+      allow get: if isValidId(transactionId) && (isAdmin() || (isSignedIn() && existing().beneficiaryId == request.auth.uid));
+      allow list: if isAdmin() || (isSignedIn() && existing().beneficiaryId == request.auth.uid);
+      allow create: if isValidId(transactionId)
+        && isAdmin()
+        && isValidTransaction(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/payout_requests/$(incoming().payoutRequestId));
+      allow update: if isValidId(transactionId)
+        && isAdmin()
+        && isValidTransaction(incoming())
+        && incoming().payoutRequestId == existing().payoutRequestId
+        && incoming().beneficiaryId == existing().beneficiaryId
+        && incoming().amountXaf == existing().amountXaf
+        && incoming().idempotencyKey == existing().idempotencyKey
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && existing().status == 'pending';
+      allow delete: if false;
+    }
+
+    // 12. Notifications
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isValidId(notificationId)
+        && isVerifiedUser()
+        && isValidNotification(incoming())
+        && incoming().createdAt == request.time
+        && (isModerator() || incoming().userId == request.auth.uid);
+      allow update: if isValidId(notificationId)
+        && isSignedIn()
+        && existing().userId == request.auth.uid
+        && isValidNotification(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 13. Immutable Audit Logs
+    match /audit_logs/{logId} {
+      allow get: if isValidId(logId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(logId)
+        && isVerifiedUser()
+        && isValidAuditLog(incoming())
+        && incoming().actorId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // 14. Official Social Links (Public read when active; Admin CRUD)
+    match /social_links/{linkId} {
+      allow get: if isValidId(linkId) && (existing().isActive == true || isAdmin());
+      allow list: if existing().isActive == true || isAdmin();
+      allow create: if isValidId(linkId)
+        && isAdmin()
+        && isValidSocialLink(incoming())
+        && incoming().updatedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(linkId)
+        && isAdmin()
+        && isValidSocialLink(incoming())
+        && incoming().updatedBy == request.auth.uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(linkId) && isAdmin();
+    }
+  }
+}
